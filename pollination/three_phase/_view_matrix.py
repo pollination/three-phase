@@ -6,14 +6,14 @@ from pollination.honeybee_radiance.multiphase import ViewMatrix
 @dataclass
 class ViewMatrixRayTracing(DAG):
 
-    grid_name = Inputs.str(
-        description='Sensor grid file name. This is useful to rename the final result '
-        'file to {grid_name} folder'
-    )
-
     radiance_parameters = Inputs.str(
         description='Radiance parameters. -I, -c 1 and -aa 0 are already included in '
         'the command.', default=''
+    )
+
+    fixed_radiance_parameters = Inputs.str(
+        description='Radiance parameters. -I, -c 1 and -aa 0 are already included in '
+        'the command.', default='-aa 0 -I -c 1'
     )
 
     sensor_count = Inputs.int(
@@ -49,8 +49,8 @@ class ViewMatrixRayTracing(DAG):
     @task(template=ViewMatrix)
     def calculate_view_matrix(
         self,
-        grid_name=grid_name,
         radiance_parameters=radiance_parameters,
+        fixed_radiance_parameters=fixed_radiance_parameters,
         sensor_count=sensor_count,
         receiver_file=receiver_file,
         sensor_grid=sensor_grid,

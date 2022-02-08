@@ -27,11 +27,10 @@ class MultiplyMatrixDag(DAG):
     )
 
     @task(template=MatrixMultiplicationThreePhase)
-    def multiple_threephase_matrix(
+    def multiply_threephase_matrix(
         self, identifier=identifier, sky_vector=sky_vector,
         view_matrix=view_matrix, t_matrix=t_matrix,
-        daylight_matrix=daylight_matrix
-
+        daylight_matrix=daylight_matrix, options='-h'
     ):
         return [
             {
