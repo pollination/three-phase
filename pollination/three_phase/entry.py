@@ -115,7 +115,7 @@ class ThreePhaseEntryPoint(DAG):
         return [
             {
                 'from': ParseSunUpHours()._outputs.sun_up_hours,
-                'to': 'resources/sky_vectors/sun-up-hours.txt'
+                'to': 'results/sun-up-hours.txt'
             }
         ]
 
@@ -188,38 +188,31 @@ class ThreePhaseEntryPoint(DAG):
             }
         ]
 
-    @task(template=CreateOctree, needs=[_create_rad_folder])
-    def create_octree(
-        self, model=_create_rad_folder._outputs.model_folder,
-        include_aperture='exclude', black_out='default'
-    ):
-        """Create octree from radiance folder."""
-        return [
-            {
-                'from': CreateOctree()._outputs.scene_file,
-                'to': 'resources/octrees/main.oct'
-            }
-        ]
-
     @task(template=CreateOctrees, needs=[_create_rad_folder, generate_sunpath])
     def create_octrees(
         self, model=_create_rad_folder._outputs.model_folder,
-        sunpath=generate_sunpath._outputs.sunpath
+        sunpath=generate_sunpath._outputs.sunpath, phase='3'
     ):
         """Create octrees from radiance folder."""
         return [
             {
                 'from': CreateOctrees()._outputs.scene_folder,
-                'to': 'resources/octrees/2_phase'
+                'to': 'resources/octrees'
             },
             {
                 'from': CreateOctrees()._outputs.scene_info
+            },
+            {
+                'from': CreateOctrees()._outputs.two_phase_info
+            },
+            {
+                'from': CreateOctrees()._outputs.three_phase_info
             }
         ]
 
     @task(
         template=TwoPhaseEntryPoint,
-        loop=create_octrees._outputs.scene_info,
+        loop=create_octrees._outputs.two_phase_info,
         needs=[
             _create_rad_folder, create_octrees, split_grid_folder,
             create_total_sky, create_direct_sky, create_sky_dome,
@@ -252,13 +245,14 @@ class ThreePhaseEntryPoint(DAG):
 
     @task(
         template=ViewMatrixRayTracing,
-        needs=[_create_rad_folder, create_octree],
+        needs=[_create_rad_folder, create_octrees],
         loop=_create_rad_folder._outputs.receivers,
         sub_folder='calcs/3_phase/view_mtx',
         sub_paths={
             'sensor_grid': 'grid/{{item.identifier}}.pts',
             'receiver_file': 'receiver/{{item.path}}',
-            'receivers_folder': 'aperture_group'
+            'receivers_folder': 'aperture_group',
+            'scene_file': '__three_phase__.oct'
         }
     )
     def calculate_view_matrix(
@@ -267,7 +261,7 @@ class ThreePhaseEntryPoint(DAG):
         sensor_count='{{item.count}}',
         receiver_file=_create_rad_folder._outputs.model_folder,
         sensor_grid=_create_rad_folder._outputs.model_folder,
-        scene_file=create_octree._outputs.scene_file,
+        scene_file=create_octrees._outputs.scene_folder,
         receivers_folder=_create_rad_folder._outputs.model_folder,
         bsdf_folder=_create_rad_folder._outputs.bsdf_folder,
         fixed_radiance_parameters='-aa 0.0 -I -c 1 -o vmtx/{{item.identifier}}..%%s.vtmx',
@@ -276,12 +270,15 @@ class ThreePhaseEntryPoint(DAG):
 
     @task(
         template=DaylightMatrixGrouping,
-        needs=[_create_rad_folder, create_octree, create_sky_dome]
+        needs=[_create_rad_folder, create_octrees, create_sky_dome],
+        sub_paths={
+            'scene_file': '__three_phase__.oct'
+        }
     )
     def group_apertures(
         self,
         model_folder=_create_rad_folder._outputs.model_folder,
-        scene_file=create_octree._outputs.scene_file,
+        scene_file=create_octrees._outputs.scene_folder,
         sky_dome=create_sky_dome._outputs.sky_dome
     ):
         return [
@@ -298,11 +295,12 @@ class ThreePhaseEntryPoint(DAG):
         template=DaylightMtxRayTracing,
         sub_folder='calcs/3_phase/daylight_mtx',
         loop=group_apertures._outputs.grouped_apertures,
-        needs=[_create_rad_folder, create_octree,
+        needs=[_create_rad_folder, create_octrees,
                create_sky_dome, group_apertures],
         sub_paths={
             'sender_file': '{{item.identifier}}.rad',
-            'senders_folder': 'aperture_group'
+            'senders_folder': 'aperture_group',
+            'scene_file': '__three_phase__.oct'
         }
     )
     def daylight_mtx_calculation(
@@ -312,7 +310,7 @@ class ThreePhaseEntryPoint(DAG):
         receiver_file=create_sky_dome._outputs.sky_dome,
         sender_file=group_apertures._outputs.grouped_apertures_folder,
         senders_folder=_create_rad_folder._outputs.model_folder,
-        scene_file=create_octree._outputs.scene_file,
+        scene_file=create_octrees._outputs.scene_folder,
         bsdf_folder=_create_rad_folder._outputs.bsdf_folder
     ):
         pass
