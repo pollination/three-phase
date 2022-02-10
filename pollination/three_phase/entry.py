@@ -3,21 +3,16 @@ from pollination_dsl.dag import Inputs, DAG, task, Outputs
 from dataclasses import dataclass
 from pollination.honeybee_radiance.translate import CreateRadianceFolderGrid
 from pollination.honeybee_radiance.grid import SplitGridFolder
-from pollination.honeybee_radiance.octree import CreateOctree, CreateOctrees, \
-    CreateOctreeWithSky
+from pollination.honeybee_radiance.octree import CreateOctrees
 from pollination.honeybee_radiance.sky import CreateSkyDome, CreateSkyMatrix
 from pollination.honeybee_radiance.sun import CreateSunMatrix, ParseSunUpHours
-from pollination.honeybee_radiance.multiphase import DaylightMatrixGrouping, \
-    MultiPhaseCombinations
-
-from ._view_matrix import ViewMatrixRayTracing
-from ._daylight_matrix import DaylightMtxRayTracing
-from ._multiply_matrix import MultiplyMatrixDag
 
 from .two_phase.entry import TwoPhaseEntryPoint
+from .three_phase.entry import ThreePhaseEntryPoint
+
 
 @dataclass
-class ThreePhaseEntryPoint(DAG):
+class RecipeEntryPoint(DAG):
     """Three phase entry point."""
 
     # inputs
@@ -171,23 +166,6 @@ class ThreePhaseEntryPoint(DAG):
             }
         ]
 
-    # Create all the octrees as needed
-    @task(
-        template=CreateOctreeWithSky, needs=[
-            generate_sunpath, _create_rad_folder]
-    )
-    def create_octree_with_suns(
-        self, model=_create_rad_folder._outputs.model_folder,
-        sky=generate_sunpath._outputs.sunpath
-    ):
-        """Create octree from radiance folder and sunpath for direct studies."""
-        return [
-            {
-                'from': CreateOctreeWithSky()._outputs.scene_file,
-                'to': 'resources/octrees/scene_with_suns.oct'
-            }
-        ]
-
     @task(template=CreateOctrees, needs=[_create_rad_folder, generate_sunpath])
     def create_octrees(
         self, model=_create_rad_folder._outputs.model_folder,
@@ -244,123 +222,32 @@ class ThreePhaseEntryPoint(DAG):
         pass
 
     @task(
-        template=ViewMatrixRayTracing,
-        needs=[_create_rad_folder, create_octrees],
-        loop=_create_rad_folder._outputs.receivers,
-        sub_folder='calcs/3_phase/view_mtx',
+        template=ThreePhaseEntryPoint,
+        needs=[
+            _create_rad_folder, create_octrees,
+            create_total_sky, create_sky_dome
+        ],
+        sub_folder='calcs/3_phase',
         sub_paths={
-            'sensor_grid': 'grid/{{item.identifier}}.pts',
-            'receiver_file': 'receiver/{{item.path}}',
-            'receivers_folder': 'aperture_group',
-            'scene_file': '__three_phase__.oct'
+            'octree': '__three_phase__.oct'
         }
     )
-    def calculate_view_matrix(
-        self,
-        radiance_parameters=radiance_parameters,
-        sensor_count='{{item.count}}',
-        receiver_file=_create_rad_folder._outputs.model_folder,
-        sensor_grid=_create_rad_folder._outputs.model_folder,
-        scene_file=create_octrees._outputs.scene_folder,
-        receivers_folder=_create_rad_folder._outputs.model_folder,
-        bsdf_folder=_create_rad_folder._outputs.bsdf_folder,
-        fixed_radiance_parameters='-aa 0.0 -I -c 1 -o vmtx/{{item.identifier}}..%%s.vtmx',
-    ):
-        pass
-
-    @task(
-        template=DaylightMatrixGrouping,
-        needs=[_create_rad_folder, create_octrees, create_sky_dome],
-        sub_paths={
-            'scene_file': '__three_phase__.oct'
-        }
-    )
-    def group_apertures(
+    def calculate_three_phase_matrix(
         self,
         model_folder=_create_rad_folder._outputs.model_folder,
-        scene_file=create_octrees._outputs.scene_folder,
-        sky_dome=create_sky_dome._outputs.sky_dome
-    ):
-        return [
-            {
-                'from': DaylightMatrixGrouping()._outputs.grouped_apertures_folder,
-                'to': 'model/sender'
-            },
-            {
-                'from': DaylightMatrixGrouping()._outputs.grouped_apertures
-            }
-        ]
-
-    @task(
-        template=DaylightMtxRayTracing,
-        sub_folder='calcs/3_phase/daylight_mtx',
-        loop=group_apertures._outputs.grouped_apertures,
-        needs=[_create_rad_folder, create_octrees,
-               create_sky_dome, group_apertures],
-        sub_paths={
-            'sender_file': '{{item.identifier}}.rad',
-            'senders_folder': 'aperture_group',
-            'scene_file': '__three_phase__.oct'
-        }
-    )
-    def daylight_mtx_calculation(
-        self,
-        name='{{item.identifier}}',
-        radiance_parameters=radiance_parameters,
-        receiver_file=create_sky_dome._outputs.sky_dome,
-        sender_file=group_apertures._outputs.grouped_apertures_folder,
-        senders_folder=_create_rad_folder._outputs.model_folder,
-        scene_file=create_octrees._outputs.scene_folder,
+        receivers=_create_rad_folder._outputs.receivers,
+        view_mtx_rad_params=radiance_parameters,
+        daylight_mtx_rad_params=radiance_parameters,
+        octree=create_octrees._outputs.scene_folder,
+        sky_dome=create_sky_dome._outputs.sky_dome,
+        sky_matrix=create_total_sky._outputs.sky_matrix,
         bsdf_folder=_create_rad_folder._outputs.bsdf_folder
     ):
-        pass
-
-    @task(
-        template=MultiPhaseCombinations,
-        needs=[group_apertures, _create_rad_folder],
-        sub_paths={
-            'sender_info': '_info.json',
-            'states_info': 'aperture_group/states.json',
-            'receiver_info': 'receiver/_info.json'
-        }
-    )
-    def get_three_phase_combinations(
-        self,
-        sender_info=group_apertures._outputs.grouped_apertures_folder,
-        receiver_info=_create_rad_folder._outputs.model_folder,
-        states_info=_create_rad_folder._outputs.model_folder
-    ):
         return [
             {
-                'from': MultiPhaseCombinations()._outputs.results_mapper,
-                'to': 'results/3_phase/_info.json'
-            },
-            {
-                'from': MultiPhaseCombinations()._outputs.multiplication_info
+                'from': ThreePhaseEntryPoint()._outputs.results_folder,
+                'to': '../../results/3_phase'
             }
         ]
-
-    # multiply all the matrices for all the states
-    @task(
-        template=MultiplyMatrixDag,
-        sub_folder='results/3_phase',
-        loop=get_three_phase_combinations._outputs.multiplication_info,
-        needs=[get_three_phase_combinations, daylight_mtx_calculation, create_total_sky],
-        sub_paths={
-            'view_matrix': '{{item.vmtx}}',
-            't_matrix': '{{item.tmtx}}',
-            'daylight_matrix': '{{item.dmtx}}'
-        }
-    )
-    def multiply_matrix(
-        self,
-        identifier='{{item.identifier}}',
-        sky_vector=create_total_sky._outputs.sky_matrix,
-        view_matrix='calcs/3_phase/view_mtx',
-        t_matrix='model/bsdf',
-        daylight_matrix='calcs/3_phase/daylight_mtx'
-    ):
-        pass
-
 
 results = Outputs.folder(source='results')

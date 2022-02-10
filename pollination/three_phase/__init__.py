@@ -1,6 +1,6 @@
-from .entry import ThreePhaseEntryPoint
+from .entry import RecipeEntryPoint
 
 
 __pollination__ = {
-    'entry_point': ThreePhaseEntryPoint
+    'entry_point': RecipeEntryPoint
 }
