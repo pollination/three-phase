@@ -8,7 +8,8 @@ from pollination.honeybee_radiance.sky import CreateSkyDome, CreateSkyMatrix
 from pollination.honeybee_radiance.sun import CreateSunMatrix, ParseSunUpHours
 
 from .two_phase.entry import TwoPhaseEntryPoint
-from .three_phase.entry import ThreePhaseEntryPoint
+from .three_phase.preparation import ThreePhaseInputsPreparation
+from .three_phase.calculation import ThreePhaseMatrixCalculation
 
 
 @dataclass
@@ -182,9 +183,6 @@ class RecipeEntryPoint(DAG):
             },
             {
                 'from': CreateOctrees()._outputs.two_phase_info
-            },
-            {
-                'from': CreateOctrees()._outputs.three_phase_info
             }
         ]
 
@@ -222,30 +220,70 @@ class RecipeEntryPoint(DAG):
         pass
 
     @task(
-        template=ThreePhaseEntryPoint,
+        template=ThreePhaseInputsPreparation,
         needs=[
             _create_rad_folder, create_octrees,
             create_total_sky, create_sky_dome
+        ],
+        sub_folder='calcs/3_phase/',
+        sub_paths={
+            'octree': '__three_phase__.oct'
+        }
+    )
+    def prepare_three_phase(
+        self,
+        model_folder=_create_rad_folder._outputs.model_folder,
+        octree=create_octrees._outputs.scene_folder,
+        sky_dome=create_sky_dome._outputs.sky_dome,
+        bsdf_folder=_create_rad_folder._outputs.bsdf_folder
+    ):
+        return [
+            {
+                'from': ThreePhaseInputsPreparation()._outputs.multiplication_info
+            },
+            {
+                'from': ThreePhaseInputsPreparation()._outputs.grouped_apertures_info
+            },
+            {
+                'from': ThreePhaseInputsPreparation()._outputs.grouped_apertures_folder,
+                'to': '../../model/sender'
+            },
+            {
+                'from': ThreePhaseInputsPreparation()._outputs.results_info,
+                'to': '../../results/3_phase/_info.json'
+            }
+        ]
+
+    @task(
+        template=ThreePhaseMatrixCalculation,
+        needs=[
+            _create_rad_folder, create_octrees,
+            create_total_sky, create_sky_dome,
+            prepare_three_phase
         ],
         sub_folder='calcs/3_phase',
         sub_paths={
             'octree': '__three_phase__.oct'
         }
     )
-    def calculate_three_phase_matrix(
+    def calculate_three_phase_matrix_total(
         self,
         model_folder=_create_rad_folder._outputs.model_folder,
+        grouped_apertures=prepare_three_phase._outputs.grouped_apertures_info,
+        grouped_apertures_folder=prepare_three_phase._outputs.grouped_apertures_folder,
+        multiplication_info=prepare_three_phase._outputs.multiplication_info,
         receivers=_create_rad_folder._outputs.receivers,
         view_mtx_rad_params=radiance_parameters,
         daylight_mtx_rad_params=radiance_parameters,
         octree=create_octrees._outputs.scene_folder,
         sky_dome=create_sky_dome._outputs.sky_dome,
         sky_matrix=create_total_sky._outputs.sky_matrix,
-        bsdf_folder=_create_rad_folder._outputs.bsdf_folder
+        bsdf_folder=_create_rad_folder._outputs.bsdf_folder,
+        multiplication_options='-h'
     ):
         return [
             {
-                'from': ThreePhaseEntryPoint()._outputs.results_folder,
+                'from': ThreePhaseMatrixCalculation()._outputs.results,
                 'to': '../../results/3_phase'
             }
         ]

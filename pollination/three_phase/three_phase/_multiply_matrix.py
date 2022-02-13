@@ -26,11 +26,15 @@ class MultiplyMatrixDag(DAG):
         description='Path to daylight matrix.'
     )
 
+    options = Inputs.str(
+        description='Additional options for dctimestep', default=''
+    )
+
     @task(template=MatrixMultiplicationThreePhase)
     def multiply_threephase_matrix(
         self, identifier=identifier, sky_vector=sky_vector,
         view_matrix=view_matrix, t_matrix=t_matrix,
-        daylight_matrix=daylight_matrix, options='-h'
+        daylight_matrix=daylight_matrix, options=options
     ):
         return [
             {

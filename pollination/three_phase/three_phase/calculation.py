@@ -1,9 +1,7 @@
+from numpy import source
 from pollination_dsl.dag import Inputs, DAG, task, Outputs
 from pollination_dsl.dag.inputs import ItemType
 from dataclasses import dataclass
-
-from pollination.honeybee_radiance.multiphase import DaylightMatrixGrouping, \
-    MultiPhaseCombinations
 
 from ._view_matrix import ViewMatrixRayTracing
 from ._daylight_matrix import DaylightMtxRayTracing
@@ -11,11 +9,26 @@ from ._multiply_matrix import MultiplyMatrixDag
 
 
 @dataclass
-class ThreePhaseEntryPoint(DAG):
+class ThreePhaseMatrixCalculation(DAG):
     """Three phase daylight simulation DAG."""
 
     model_folder = Inputs.folder(
         description='Radiance model folder', path='model'
+    )
+    
+    grouped_apertures = Inputs.list(
+        description='List fo grouped apertures for daylight matrix calculation.',
+        items_type=ItemType.JSONObject
+    )
+
+    grouped_apertures_folder = Inputs.folder(
+        description='A folder with all the grouped apertures for daylight matrix '
+        'calculation. Use ThreePhaseInputsPreparation to generate this folder.'
+    )
+
+    multiplication_info = Inputs.list(
+        description='A JSON file with matrix multiplication information.',
+        items_type=ItemType.JSONObject
     )
 
     receivers = Inputs.list(
@@ -53,6 +66,12 @@ class ThreePhaseEntryPoint(DAG):
         optional=True
     )
 
+    multiplication_options = Inputs.str(
+        description='A string that will be passed for matrix multiplication. Default is '
+        'set to -h to remove the header.',
+        default='-h'
+    )
+
     @task(
         template=ViewMatrixRayTracing,
         loop=receivers,
@@ -77,28 +96,10 @@ class ThreePhaseEntryPoint(DAG):
     ):
         pass
 
-    @task(template=DaylightMatrixGrouping)
-    def group_apertures(
-        self,
-        model_folder=model_folder,
-        scene_file=octree,
-        sky_dome=sky_dome
-    ):
-        return [
-            {
-                'from': DaylightMatrixGrouping()._outputs.grouped_apertures_folder,
-                'to': 'model/sender'
-            },
-            {
-                'from': DaylightMatrixGrouping()._outputs.grouped_apertures
-            }
-        ]
-
     @task(
         template=DaylightMtxRayTracing,
         sub_folder='daylight_mtx',
-        loop=group_apertures._outputs.grouped_apertures,
-        needs=[group_apertures],
+        loop=grouped_apertures,
         sub_paths={
             'sender_file': '{{item.identifier}}.rad',
             'senders_folder': 'aperture_group'
@@ -109,44 +110,19 @@ class ThreePhaseEntryPoint(DAG):
         name='{{item.identifier}}',
         radiance_parameters=daylight_mtx_rad_params,
         receiver_file=sky_dome,
-        sender_file=group_apertures._outputs.grouped_apertures_folder,
+        sender_file=grouped_apertures_folder,
         senders_folder=model_folder,
         scene_file=octree,
         bsdf_folder=bsdf_folder
     ):
         pass
 
-    @task(
-        template=MultiPhaseCombinations,
-        needs=[group_apertures],
-        sub_paths={
-            'sender_info': '_info.json',
-            'states_info': 'aperture_group/states.json',
-            'receiver_info': 'receiver/_info.json'
-        }
-    )
-    def get_three_phase_combinations(
-        self,
-        sender_info=group_apertures._outputs.grouped_apertures_folder,
-        receiver_info=model_folder,
-        states_info=model_folder
-    ):
-        return [
-            {
-                'from': MultiPhaseCombinations()._outputs.results_mapper,
-                'to': 'results/_info.json'
-            },
-            {
-                'from': MultiPhaseCombinations()._outputs.multiplication_info
-            }
-        ]
-
     # multiply all the matrices for all the states
     @task(
         template=MultiplyMatrixDag,
         sub_folder='results',
-        loop=get_three_phase_combinations._outputs.multiplication_info,
-        needs=[get_three_phase_combinations, daylight_mtx_calculation],
+        loop=multiplication_info,
+        needs=[daylight_mtx_calculation],
         sub_paths={
             'view_matrix': '{{item.vmtx}}',
             't_matrix': 'bsdf/{{item.tmtx}}',
@@ -159,8 +135,10 @@ class ThreePhaseEntryPoint(DAG):
         sky_vector=sky_matrix,
         view_matrix='view_mtx',
         t_matrix=model_folder,
-        daylight_matrix='daylight_mtx'
+        daylight_matrix='daylight_mtx',
+        options=multiplication_options
     ):
         pass
 
-    results_folder = Outputs.folder(source='results')
+    results = Outputs.folder(source='results')
+
