@@ -64,7 +64,7 @@ class RecipeEntryPoint(DAG):
     )
 
     @task(template=CreateRadianceFolderGrid)
-    def _create_rad_folder(self, input_model=model, grid_filter=grid_filter):
+    def create_rad_folder(self, input_model=model, grid_filter=grid_filter):
         """Translate the input model to a radiance folder."""
         return [
             {
@@ -148,11 +148,11 @@ class RecipeEntryPoint(DAG):
     # split grids
     @task(
         template=SplitGridFolder,
-        needs=[_create_rad_folder],
+        needs=[create_rad_folder],
         sub_paths={'input_folder': 'grid'}
     )
     def split_grid_folder(
-        self, input_folder=_create_rad_folder._outputs.model_folder,
+        self, input_folder=create_rad_folder._outputs.model_folder,
         cpu_count=cpu_count, cpus_per_grid=3, min_sensor_count=min_sensor_count
     ):
         """Split sensor grid folder based on the number of CPUs"""
@@ -167,9 +167,9 @@ class RecipeEntryPoint(DAG):
             }
         ]
 
-    @task(template=CreateOctrees, needs=[_create_rad_folder, generate_sunpath])
+    @task(template=CreateOctrees, needs=[create_rad_folder, generate_sunpath])
     def create_octrees(
-        self, model=_create_rad_folder._outputs.model_folder,
+        self, model=create_rad_folder._outputs.model_folder,
         sunpath=generate_sunpath._outputs.sunpath, phase='3'
     ):
         """Create octrees from radiance folder."""
@@ -190,7 +190,7 @@ class RecipeEntryPoint(DAG):
         template=TwoPhaseEntryPoint,
         loop=create_octrees._outputs.two_phase_info,
         needs=[
-            _create_rad_folder, create_octrees, split_grid_folder,
+            create_rad_folder, create_octrees, split_grid_folder,
             create_total_sky, create_direct_sky, create_sky_dome,
             generate_sunpath
         ],
@@ -214,7 +214,7 @@ class RecipeEntryPoint(DAG):
         total_sky=create_total_sky._outputs.sky_matrix,
         direct_sky=create_direct_sky._outputs.sky_matrix,
         sun_modifiers=generate_sunpath._outputs.sun_modifiers,
-        bsdf_folder=_create_rad_folder._outputs.bsdf_folder,
+        bsdf_folder=create_rad_folder._outputs.bsdf_folder,
         results_folder='../../../results/2_phase'
     ):
         pass
@@ -222,7 +222,7 @@ class RecipeEntryPoint(DAG):
     @task(
         template=ThreePhaseInputsPreparation,
         needs=[
-            _create_rad_folder, create_octrees,
+            create_rad_folder, create_octrees,
             create_total_sky, create_sky_dome
         ],
         sub_folder='calcs/3_phase/',
@@ -232,10 +232,10 @@ class RecipeEntryPoint(DAG):
     )
     def prepare_three_phase(
         self,
-        model_folder=_create_rad_folder._outputs.model_folder,
+        model_folder=create_rad_folder._outputs.model_folder,
         octree=create_octrees._outputs.scene_folder,
         sky_dome=create_sky_dome._outputs.sky_dome,
-        bsdf_folder=_create_rad_folder._outputs.bsdf_folder
+        bsdf_folder=create_rad_folder._outputs.bsdf_folder
     ):
         return [
             {
@@ -257,7 +257,7 @@ class RecipeEntryPoint(DAG):
     @task(
         template=ThreePhaseMatrixCalculation,
         needs=[
-            _create_rad_folder, create_octrees,
+            create_rad_folder, create_octrees,
             create_total_sky, create_sky_dome,
             prepare_three_phase
         ],
@@ -268,17 +268,17 @@ class RecipeEntryPoint(DAG):
     )
     def calculate_three_phase_matrix_total(
         self,
-        model_folder=_create_rad_folder._outputs.model_folder,
+        model_folder=create_rad_folder._outputs.model_folder,
         grouped_apertures=prepare_three_phase._outputs.grouped_apertures_info,
         grouped_apertures_folder=prepare_three_phase._outputs.grouped_apertures_folder,
         multiplication_info=prepare_three_phase._outputs.multiplication_info,
-        receivers=_create_rad_folder._outputs.receivers,
+        receivers=create_rad_folder._outputs.receivers,
         view_mtx_rad_params=radiance_parameters,
         daylight_mtx_rad_params=radiance_parameters,
         octree=create_octrees._outputs.scene_folder,
         sky_dome=create_sky_dome._outputs.sky_dome,
         sky_matrix=create_total_sky._outputs.sky_matrix,
-        bsdf_folder=_create_rad_folder._outputs.bsdf_folder,
+        bsdf_folder=create_rad_folder._outputs.bsdf_folder,
         multiplication_options='-h'
     ):
         return [
