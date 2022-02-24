@@ -1,4 +1,3 @@
-import imp
 from pollination_dsl.dag import Inputs, DAG, task, Outputs
 from dataclasses import dataclass
 from pollination.honeybee_radiance.translate import CreateRadianceFolderGrid
@@ -43,6 +42,16 @@ class RecipeEntryPoint(DAG):
     radiance_parameters = Inputs.str(
         description='The radiance parameters for ray tracing.',
         default='-ab 1 -ad 100 -lw 0.01'
+    )
+
+    view_mtx_rad_params = Inputs.str(
+        description='The radiance parameters for ray tracing.',
+        default='-ab 2 -ad 5000 -lw 2e-05'
+    )
+
+    daylight_mtx_rad_params = Inputs.str(
+        description='The radiance parameters for ray tracing.',
+        default='-ab 2 -ad 5000 -lw 2e-05'
     )
 
     grid_filter = Inputs.str(
@@ -273,8 +282,8 @@ class RecipeEntryPoint(DAG):
         grouped_apertures_folder=prepare_three_phase._outputs.grouped_apertures_folder,
         multiplication_info=prepare_three_phase._outputs.multiplication_info,
         receivers=create_rad_folder._outputs.receivers,
-        view_mtx_rad_params=radiance_parameters,
-        daylight_mtx_rad_params=radiance_parameters,
+        view_mtx_rad_params=view_mtx_rad_params,
+        daylight_mtx_rad_params=daylight_mtx_rad_params,
         octree=create_octrees._outputs.scene_folder,
         sky_dome=create_sky_dome._outputs.sky_dome,
         sky_matrix=create_total_sky._outputs.sky_matrix,
