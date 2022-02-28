@@ -29,12 +29,32 @@ class ThreePhaseInputsPreparation(DAG):
         optional=True
     )
 
+    size = Inputs.float(
+        description='Aperture grid size. A lower number will give a finer grid and more '
+        'accurate results but the calculation time will increase.', default=0.2
+    )
+
+    threshold = Inputs.float(
+        description='A number that determines if two apertures/aperture groups can be '
+        'clustered. A higher number is more accurate but will also increase the number '
+        'of aperture groups', default=0.001
+    )
+
+    ambient_division = Inputs.int(
+        description='Number of ambient divisions (-ad) for view factor calculation in '
+        'rfluxmtx. Increasing the number will give more accurate results but also '
+        'increase the calculation time.', default=1000
+    )
+
     @task(template=DaylightMatrixGrouping)
     def daylight_matrix_aperture_grouping(
         self,
         model_folder=model_folder,
         scene_file=octree,
-        sky_dome=sky_dome
+        sky_dome=sky_dome,
+        size=size,
+        threshold=threshold,
+        ambient_division=ambient_division
     ):
         return [
             {
