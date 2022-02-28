@@ -72,6 +72,23 @@ class RecipeEntryPoint(DAG):
         extensions=['wea']
     )
 
+    dmtx_group_size = Inputs.float(
+        description='Aperture grid size. A lower number will give a finer grid and more '
+        'accurate results but the calculation time will increase.', default=0.2
+    )
+
+    dmtx_group_threshold = Inputs.float(
+        description='A number that determines if two apertures/aperture groups can be '
+        'clustered. A higher number is more accurate but will also increase the number '
+        'of aperture groups', default=0.001
+    )
+
+    dmtx_group_ambient_division = Inputs.int(
+        description='Number of ambient divisions (-ad) for view factor calculation in '
+        'rfluxmtx. Increasing the number will give more accurate results but also '
+        'increase the calculation time.', default=1000
+    )
+
     @task(template=CreateRadianceFolderGrid)
     def create_rad_folder(self, input_model=model, grid_filter=grid_filter):
         """Translate the input model to a radiance folder."""
@@ -244,7 +261,10 @@ class RecipeEntryPoint(DAG):
         model_folder=create_rad_folder._outputs.model_folder,
         octree=create_octrees._outputs.scene_folder,
         sky_dome=create_sky_dome._outputs.sky_dome,
-        bsdf_folder=create_rad_folder._outputs.bsdf_folder
+        bsdf_folder=create_rad_folder._outputs.bsdf_folder,
+        size=dmtx_group_size,
+        threshold=dmtx_group_threshold,
+        ambient_division=dmtx_group_ambient_division
     ):
         return [
             {
