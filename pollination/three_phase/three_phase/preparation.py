@@ -29,12 +29,24 @@ class ThreePhaseInputsPreparation(DAG):
         optional=True
     )
 
+    dmtx_group_params = Inputs.str(
+        description='A string to change the parameters for aperture grouping for '
+        'daylight matrix calculation. Valid keys are -s for aperture grid size, -t for '
+        'the threshold that determines if two apertures/aperture groups can be '
+        'clustered, and -ad for ambient divisions used in view factor calculation '
+        'The default is -s 0.2 -t 0.001 -ad 1000. The order of the keys is not '
+        'important and you can include one or all of them. For instance if you only '
+        'want to change the aperture grid size to 0.5 you should use -s 0.5 as the '
+        'input.', default='-s 0.2 -t 0.001 -ad 1000'
+    )
+
     @task(template=DaylightMatrixGrouping)
     def daylight_matrix_aperture_grouping(
         self,
         model_folder=model_folder,
         scene_file=octree,
-        sky_dome=sky_dome
+        sky_dome=sky_dome,
+        dmtx_group_params=dmtx_group_params
     ):
         return [
             {
