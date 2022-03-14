@@ -65,12 +65,6 @@ class ThreePhaseMatrixCalculation(DAG):
         optional=True
     )
 
-    multiplication_options = Inputs.str(
-        description='A string that will be passed for matrix multiplication. Default is '
-        'set to -h to remove the header.',
-        default='-h'
-    )
-
     @task(
         template=ViewMatrixRayTracing,
         loop=receivers,
@@ -135,7 +129,6 @@ class ThreePhaseMatrixCalculation(DAG):
         view_matrix='view_mtx',
         t_matrix=model_folder,
         daylight_matrix='daylight_mtx',
-        options=multiplication_options
     ):
         pass
 
