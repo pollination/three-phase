@@ -300,7 +300,6 @@ class RecipeEntryPoint(DAG):
         sky_dome=create_sky_dome._outputs.sky_dome,
         sky_matrix=create_total_sky._outputs.sky_matrix,
         bsdf_folder=create_rad_folder._outputs.bsdf_folder,
-        multiplication_options='-h'
     ):
         return [
             {
