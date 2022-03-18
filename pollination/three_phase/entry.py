@@ -1,10 +1,9 @@
 from pollination_dsl.dag import Inputs, DAG, task, Outputs
 from dataclasses import dataclass
 from pollination.honeybee_radiance.translate import CreateRadianceFolderGrid
-from pollination.honeybee_radiance.grid import SplitGridFolder
-from pollination.honeybee_radiance.octree import CreateOctrees
 from pollination.honeybee_radiance.sky import CreateSkyDome, CreateSkyMatrix
 from pollination.honeybee_radiance.sun import CreateSunMatrix, ParseSunUpHours
+from pollination.honeybee_radiance.multiphase import CreateOctreesGrids
 
 from .two_phase.entry import TwoPhaseEntryPoint
 from .three_phase.preparation import ThreePhaseInputsPreparation
@@ -165,52 +164,34 @@ class RecipeEntryPoint(DAG):
             }
         ]
 
-    # split grids
-    @task(
-        template=SplitGridFolder,
-        needs=[create_rad_folder],
-        sub_paths={'input_folder': 'grid'}
-    )
-    def split_grid_folder(
-        self, input_folder=create_rad_folder._outputs.model_folder,
-        cpu_count=cpu_count, cpus_per_grid=3, min_sensor_count=min_sensor_count
-    ):
-        """Split sensor grid folder based on the number of CPUs"""
-        return [
-            {
-                'from': SplitGridFolder()._outputs.output_folder,
-                'to': 'resources/grid'
-            },
-            {
-                'from': SplitGridFolder()._outputs.sensor_grids,
-                'description': 'Sensor grids information.'
-            }
-        ]
-
-    @task(template=CreateOctrees, needs=[create_rad_folder, generate_sunpath])
-    def create_octrees(
+    @task(template=CreateOctreesGrids, needs=[create_rad_folder, generate_sunpath])
+    def create_octrees_grids(
         self, model=create_rad_folder._outputs.model_folder,
-        sunpath=generate_sunpath._outputs.sunpath, phase='3'
+        sunpath=generate_sunpath._outputs.sunpath, phase='3', cpu_count=cpu_count,
+        cpus_per_grid=3, min_sensor_count=min_sensor_count
     ):
-        """Create octrees from radiance folder."""
         return [
             {
-                'from': CreateOctrees()._outputs.scene_folder,
+                'from': CreateOctreesGrids()._outputs.scene_folder,
                 'to': 'resources/octrees'
             },
             {
-                'from': CreateOctrees()._outputs.scene_info
+                'from': CreateOctreesGrids()._outputs.grid_folder,
+                'to': 'resources/grid'
             },
             {
-                'from': CreateOctrees()._outputs.two_phase_info
+                'from': CreateOctreesGrids()._outputs.scene_info
+            },
+            {
+                'from': CreateOctreesGrids()._outputs.two_phase_info
             }
         ]
 
     @task(
         template=TwoPhaseEntryPoint,
-        loop=create_octrees._outputs.two_phase_info,
+        loop=create_octrees_grids._outputs.two_phase_info,
         needs=[
-            create_rad_folder, create_octrees, split_grid_folder,
+            create_rad_folder, create_octrees_grids,
             create_total_sky, create_direct_sky, create_sky_dome,
             generate_sunpath
         ],
@@ -218,18 +199,19 @@ class RecipeEntryPoint(DAG):
         sub_paths={
             'octree': '{{item.octree}}',
             'octree_direct': '{{item.octree_direct}}',
-            'octree_direct_sun': '{{item.octree_direct_sun}}'
+            'octree_direct_sun': '{{item.octree_direct_sun}}',
+            'sensor_grids_folder': '{{item.light_path}}'
         }
     )
     def calculate_two_phase_matrix(
         self,
         identifier='{{item.identifier}}',
         radiance_parameters=radiance_parameters,
-        sensor_grids_info=split_grid_folder._outputs.sensor_grids,
-        sensor_grids_folder=split_grid_folder._outputs.output_folder,
-        octree=create_octrees._outputs.scene_folder,
-        octree_direct=create_octrees._outputs.scene_folder,
-        octree_direct_sun=create_octrees._outputs.scene_folder,
+        sensor_grids_info='{{item.sensor_grids_info}}',
+        sensor_grids_folder=create_octrees_grids._outputs.grid_folder,
+        octree=create_octrees_grids._outputs.scene_folder,
+        octree_direct=create_octrees_grids._outputs.scene_folder,
+        octree_direct_sun=create_octrees_grids._outputs.scene_folder,
         sky_dome=create_sky_dome._outputs.sky_dome,
         total_sky=create_total_sky._outputs.sky_matrix,
         direct_sky=create_direct_sky._outputs.sky_matrix,
@@ -242,7 +224,7 @@ class RecipeEntryPoint(DAG):
     @task(
         template=ThreePhaseInputsPreparation,
         needs=[
-            create_rad_folder, create_octrees,
+            create_rad_folder, create_octrees_grids,
             create_total_sky, create_sky_dome
         ],
         sub_folder='calcs/3_phase/',
@@ -253,7 +235,7 @@ class RecipeEntryPoint(DAG):
     def prepare_three_phase(
         self,
         model_folder=create_rad_folder._outputs.model_folder,
-        octree=create_octrees._outputs.scene_folder,
+        octree=create_octrees_grids._outputs.scene_folder,
         sky_dome=create_sky_dome._outputs.sky_dome,
         bsdf_folder=create_rad_folder._outputs.bsdf_folder,
         dmtx_group_params=dmtx_group_params
@@ -278,7 +260,7 @@ class RecipeEntryPoint(DAG):
     @task(
         template=ThreePhaseMatrixCalculation,
         needs=[
-            create_rad_folder, create_octrees,
+            create_rad_folder, create_octrees_grids,
             create_total_sky, create_sky_dome,
             prepare_three_phase
         ],
@@ -296,7 +278,7 @@ class RecipeEntryPoint(DAG):
         receivers=create_rad_folder._outputs.receivers,
         view_mtx_rad_params=view_mtx_rad_params,
         daylight_mtx_rad_params=daylight_mtx_rad_params,
-        octree=create_octrees._outputs.scene_folder,
+        octree=create_octrees_grids._outputs.scene_folder,
         sky_dome=create_sky_dome._outputs.sky_dome,
         sky_matrix=create_total_sky._outputs.sky_matrix,
         bsdf_folder=create_rad_folder._outputs.bsdf_folder,
