@@ -13,7 +13,7 @@ class TwoPhaseRayTracing(DAG):
 
     radiance_parameters = Inputs.str(
         description='The radiance parameters for ray tracing',
-        default='-ab 2 -ad 5000 -lw 2e-05'
+        default='-ab 3 -ad 5000 -lw 1e-4'
     )
 
     octree = Inputs.file(
