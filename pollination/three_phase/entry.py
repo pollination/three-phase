@@ -40,17 +40,17 @@ class RecipeEntryPoint(DAG):
 
     radiance_parameters = Inputs.str(
         description='The radiance parameters for ray tracing.',
-        default='-ab 1 -ad 100 -lw 0.01'
+        default='-ab 3 -ad 5000 -lw 1e-4'
     )
 
     view_mtx_rad_params = Inputs.str(
         description='The radiance parameters for ray tracing.',
-        default='-ab 2 -ad 5000 -lw 2e-05'
+        default='-ab 3 -ad 1000 -lw 5e-4'
     )
 
     daylight_mtx_rad_params = Inputs.str(
         description='The radiance parameters for ray tracing.',
-        default='-ab 2 -ad 5000 -lw 2e-05'
+        default='-ab 3 -ad 1000 -lw 5e-4 -c 500'
     )
 
     grid_filter = Inputs.str(
@@ -200,7 +200,7 @@ class RecipeEntryPoint(DAG):
             'octree': '{{item.octree}}',
             'octree_direct': '{{item.octree_direct}}',
             'octree_direct_sun': '{{item.octree_direct_sun}}',
-            'sensor_grids_folder': '{{item.light_path}}'
+            'sensor_grids_folder': '{{item.sensor_grids_folder}}'
         }
     )
     def calculate_two_phase_matrix(
