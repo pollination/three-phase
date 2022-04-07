@@ -94,7 +94,7 @@ class TwoPhaseRayTracing(DAG):
         sensor_count=sensor_count,
         sky_matrix=sky_matrix_direct, sky_dome=sky_dome,
         sensor_grid=sensor_grid,
-        scene_file=octree,
+        scene_file=octree_direct,
         bsdf_folder=bsdfs
     ):
         return [
