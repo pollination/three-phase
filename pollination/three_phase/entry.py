@@ -5,6 +5,8 @@ from pollination.honeybee_radiance.sky import CreateSkyDome, CreateSkyMatrix
 from pollination.honeybee_radiance.sun import CreateSunMatrix, ParseSunUpHours
 from pollination.honeybee_radiance.multiphase import PrepareDynamic
 
+from pollination.path.read import ReadJSONList
+
 from .two_phase.entry import TwoPhaseEntryPoint
 from .two_phase.dynamic.entry import DynamicGroup
 from .three_phase.preparation import ThreePhaseInputsPreparation
@@ -243,10 +245,12 @@ class RecipeEntryPoint(DAG):
     ):
         return [
             {
-                'from': ThreePhaseInputsPreparation()._outputs.multiplication_info
+                'from': ThreePhaseInputsPreparation()._outputs.multiplication_info,
+                'to': '../../calcs/3_phase/info/multiplication_info.json'
             },
             {
-                'from': ThreePhaseInputsPreparation()._outputs.grouped_apertures_info
+                'from': ThreePhaseInputsPreparation()._outputs.grouped_apertures_info,
+                'to': '../../calcs/3_phase/info/grouped_apertures_info.json'
             },
             {
                 'from': ThreePhaseInputsPreparation()._outputs.grouped_apertures_folder,
@@ -258,12 +262,18 @@ class RecipeEntryPoint(DAG):
             }
         ]
 
+    @task(template=ReadJSONList, needs=[prepare_three_phase])
+    def multiplication_info_to_json(
+            self, src=prepare_three_phase._outputs.multiplication_info
+            ):
+        return [{'from': ReadJSONList()._outputs.data}]
+
     @task(
         template=ThreePhaseMatrixCalculation,
         needs=[
             create_rad_folder, prepare_dynamic,
             create_total_sky, create_sky_dome,
-            prepare_three_phase
+            prepare_three_phase, multiplication_info_to_json
         ],
         sub_folder='calcs/3_phase',
         sub_paths={
@@ -273,9 +283,8 @@ class RecipeEntryPoint(DAG):
     def calculate_three_phase_matrix_total(
         self,
         model_folder=create_rad_folder._outputs.model_folder,
-        grouped_apertures=prepare_three_phase._outputs.grouped_apertures_info,
         grouped_apertures_folder=prepare_three_phase._outputs.grouped_apertures_folder,
-        multiplication_info=prepare_three_phase._outputs.multiplication_info,
+        multiplication_info=multiplication_info_to_json._outputs.data,
         receivers=create_rad_folder._outputs.receivers,
         view_mtx_rad_params=view_mtx_rad_params,
         daylight_mtx_rad_params=daylight_mtx_rad_params,

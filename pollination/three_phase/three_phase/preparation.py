@@ -97,15 +97,14 @@ class ThreePhaseInputsPreparation(DAG):
         'calculation.', source='model/sender'
     )
 
-    grouped_apertures_info = Outputs.list(
-        description='List fo grouped apertures for daylight matrix calculation.',
-        source=daylight_matrix_aperture_grouping._outputs.grouped_apertures_file,
-        items_type=ItemType.JSONObject
+    grouped_apertures_info = Outputs.file(
+        description='A JSON file with List of grouped apertures for daylight matrix '
+        'calculation.', source='model/sender/_info.json'
     )
 
-    multiplication_info = Outputs.list(
+    multiplication_info = Outputs.file(
         description='A JSON file with matrix multiplication information.',
-        source='multiplication_info.json', items_type=ItemType.JSONObject
+        source='multiplication_info.json'
     )
 
     results_info = Outputs.file(

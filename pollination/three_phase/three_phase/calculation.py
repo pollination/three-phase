@@ -1,6 +1,8 @@
+from dataclasses import dataclass
+
 from pollination_dsl.dag import Inputs, DAG, task, Outputs
 from pollination_dsl.dag.inputs import ItemType
-from dataclasses import dataclass
+from pollination.path.read import ReadJSONList
 
 from ._view_matrix import ViewMatrixRayTracing
 from ._daylight_matrix import DaylightMtxRayTracing
@@ -14,15 +16,11 @@ class ThreePhaseMatrixCalculation(DAG):
     model_folder = Inputs.folder(
         description='Radiance model folder', path='model'
     )
-    
-    grouped_apertures = Inputs.list(
-        description='List fo grouped apertures for daylight matrix calculation.',
-        items_type=ItemType.JSONObject
-    )
 
     grouped_apertures_folder = Inputs.folder(
         description='A folder with all the grouped apertures for daylight matrix '
-        'calculation. Use ThreePhaseInputsPreparation to generate this folder.'
+        'calculation. Use ThreePhaseInputsPreparation to generate this folder. '
+        'This folder also includes an _info.json file for aperture info.'
     )
 
     multiplication_info = Inputs.list(
@@ -89,10 +87,17 @@ class ThreePhaseMatrixCalculation(DAG):
     ):
         pass
 
+    @task(template=ReadJSONList, sub_paths={'src': '_info.json'})
+    def grouped_apertures_info_to_json(
+        self, src=grouped_apertures_folder
+        ):
+        return [{'from': ReadJSONList()._outputs.data}]
+
     @task(
         template=DaylightMtxRayTracing,
         sub_folder='daylight_mtx',
-        loop=grouped_apertures,
+        needs=[grouped_apertures_info_to_json],
+        loop=grouped_apertures_info_to_json._outputs.data,
         sub_paths={
             'sender_file': '{{item.identifier}}.rad',
             'senders_folder': 'aperture_group'
