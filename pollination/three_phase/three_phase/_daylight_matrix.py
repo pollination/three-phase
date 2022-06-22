@@ -55,6 +55,6 @@ class DaylightMtxRayTracing(DAG):
         return [
             {
                 'from': FluxTransfer()._outputs.flux_mtx,
-                'to': '{{name}}.dmtx'
+                'to': '{{inputs.name}}.dmtx'
             }
         ]
