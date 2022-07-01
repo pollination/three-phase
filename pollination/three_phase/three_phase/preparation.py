@@ -1,5 +1,4 @@
 from pollination_dsl.dag import Inputs, DAG, task, Outputs
-from pollination_dsl.dag.inputs import ItemType
 from dataclasses import dataclass
 
 from pollination.honeybee_radiance.multiphase import DaylightMatrixGrouping, \
