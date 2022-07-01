@@ -170,7 +170,7 @@ class RecipeEntryPoint(DAG):
     @task(template=PrepareMultiphase, needs=[create_rad_folder, generate_sunpath])
     def prepare_dynamic(
         self, model=create_rad_folder._outputs.model_folder,
-        sunpath=generate_sunpath._outputs.sunpath, phase=3, cpu_count=cpu_count,
+        sunpath=generate_sunpath._outputs.sunpath, phase=5, cpu_count=cpu_count,
         cpus_per_grid=3, min_sensor_count=min_sensor_count, static='include'
     ):
         return [
