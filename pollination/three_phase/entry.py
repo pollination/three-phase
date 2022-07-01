@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pollination.honeybee_radiance.translate import CreateRadianceFolderGrid
 from pollination.honeybee_radiance.sky import CreateSkyDome, CreateSkyMatrix
 from pollination.honeybee_radiance.sun import CreateSunMatrix, ParseSunUpHours
-from pollination.honeybee_radiance.multiphase import PrepareDynamic
+from pollination.honeybee_radiance.multiphase import PrepareMultiphase
 
 from pollination.path.read import ReadJSONList
 
@@ -167,7 +167,7 @@ class RecipeEntryPoint(DAG):
             }
         ]
 
-    @task(template=PrepareDynamic, needs=[create_rad_folder, generate_sunpath])
+    @task(template=PrepareMultiphase, needs=[create_rad_folder, generate_sunpath])
     def prepare_dynamic(
         self, model=create_rad_folder._outputs.model_folder,
         sunpath=generate_sunpath._outputs.sunpath, phase=3, cpu_count=cpu_count,
@@ -175,18 +175,18 @@ class RecipeEntryPoint(DAG):
     ):
         return [
             {
-                'from': PrepareDynamic()._outputs.scene_folder,
+                'from': PrepareMultiphase()._outputs.scene_folder,
                 'to': 'resources/octrees'
             },
             {
-                'from': PrepareDynamic()._outputs.grid_folder,
+                'from': PrepareMultiphase()._outputs.grid_folder,
                 'to': 'resources/grid'
             },
             {
-                'from': PrepareDynamic()._outputs.scene_info
+                'from': PrepareMultiphase()._outputs.scene_info
             },
             {
-                'from': PrepareDynamic()._outputs.two_phase_info
+                'from': PrepareMultiphase()._outputs.two_phase_info
             }
         ]
 
