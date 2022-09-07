@@ -78,10 +78,10 @@ class ThreePhaseInputsPreparation(DAG):
         states_info=model_folder
     ):
         return [
-            {
-                'from': MultiPhaseCombinations()._outputs.results_mapper,
-                'to': 'results/_info.json'
-            },
+            # {
+            #     'from': MultiPhaseCombinations()._outputs.results_mapper,
+            #     'to': 'results/_info.json'
+            # },
             {
                 'from': MultiPhaseCombinations()._outputs.multiplication_file,
                 'to': 'multiplication_info.json'

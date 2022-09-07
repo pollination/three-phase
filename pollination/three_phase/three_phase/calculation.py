@@ -118,7 +118,6 @@ class ThreePhaseMatrixCalculation(DAG):
     # multiply all the matrices for all the states
     @task(
         template=MultiplyMatrixDag,
-        sub_folder='results',
         loop=multiplication_info,
         needs=[daylight_mtx_calculation],
         sub_paths={
@@ -130,6 +129,9 @@ class ThreePhaseMatrixCalculation(DAG):
     def multiply_matrix(
         self,
         identifier='{{item.identifier}}',
+        light_path='{{item.light_path}}',
+        grid_id='{{item.grid_id}}',
+        state_id='{{item.state_id}}',
         sky_vector=sky_matrix,
         view_matrix='view_mtx',
         t_matrix=model_folder,

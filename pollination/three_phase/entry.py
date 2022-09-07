@@ -103,11 +103,11 @@ class RecipeEntryPoint(DAG):
             },
             {
                 'from': CreateRadianceFolderGrid()._outputs.model_sensor_grids_file,
-                'to': 'results/2_phase/_model_grids_info.json'
+                'to': 'results/_model_grids_info.json'
             },
             {
                 'from': CreateRadianceFolderGrid()._outputs.sensor_grids_file,
-                'to': 'results/2_phase/_info.json'
+                'to': 'results/_info.json'
             },
             {
                 'from': CreateRadianceFolderGrid()._outputs.receivers,
@@ -168,7 +168,7 @@ class RecipeEntryPoint(DAG):
         ]
 
     @task(template=PrepareMultiphase, needs=[create_rad_folder, generate_sunpath])
-    def prepare_dynamic(
+    def prepare_multiphase(
         self, model=create_rad_folder._outputs.model_folder,
         sunpath=generate_sunpath._outputs.sunpath, phase=5, cpu_count=cpu_count,
         cpus_per_grid=3, min_sensor_count=min_sensor_count, static='include'
@@ -176,25 +176,28 @@ class RecipeEntryPoint(DAG):
         return [
             {
                 'from': PrepareMultiphase()._outputs.scene_folder,
-                'to': 'resources/octrees'
+                'to': 'resources/dynamic/octree'
             },
             {
                 'from': PrepareMultiphase()._outputs.grid_folder,
-                'to': 'resources/grid'
+                'to': 'resources/dynamic/grid'
             },
             {
                 'from': PrepareMultiphase()._outputs.scene_info
             },
             {
                 'from': PrepareMultiphase()._outputs.two_phase_info
+            },
+            {   'from': PrepareMultiphase()._outputs.grid_states_file,
+                'to': 'results/grid_states.json'
             }
         ]
 
     @task(
         template=DynamicGroup,
-        loop=prepare_dynamic._outputs.two_phase_info,
+        loop=prepare_multiphase._outputs.two_phase_info,
         needs=[
-            create_rad_folder, prepare_dynamic,
+            create_rad_folder, prepare_multiphase,
             create_total_sky, create_direct_sky, create_sky_dome,
             generate_sunpath
         ],
@@ -209,25 +212,26 @@ class RecipeEntryPoint(DAG):
     def calculate_two_phase_matrix(
         self,
         identifier='{{item.identifier}}',
+        light_path='{{item.light_path}}',
         radiance_parameters=radiance_parameters,
         sensor_grids_info='{{item.sensor_grids_info}}',
-        sensor_grids_folder=prepare_dynamic._outputs.grid_folder,
-        octree_file=prepare_dynamic._outputs.scene_folder,
-        octree_file_direct=prepare_dynamic._outputs.scene_folder,
-        octree_file_with_suns=prepare_dynamic._outputs.scene_folder,
+        sensor_grids_folder=prepare_multiphase._outputs.grid_folder,
+        octree_file=prepare_multiphase._outputs.scene_folder,
+        octree_file_direct=prepare_multiphase._outputs.scene_folder,
+        octree_file_with_suns=prepare_multiphase._outputs.scene_folder,
         sky_dome=create_sky_dome._outputs.sky_dome,
         total_sky=create_total_sky._outputs.sky_matrix,
         direct_sky=create_direct_sky._outputs.sky_matrix,
         sun_modifiers=generate_sunpath._outputs.sun_modifiers,
         bsdf_folder=create_rad_folder._outputs.bsdf_folder,
-        results_folder='../../../results/2_phase'
+        results_folder='../../../results'
     ):
         pass
 
     @task(
         template=ThreePhaseInputsPreparation,
         needs=[
-            create_rad_folder, prepare_dynamic,
+            create_rad_folder, prepare_multiphase,
             create_total_sky, create_sky_dome
         ],
         sub_folder='calcs/3_phase/',
@@ -238,7 +242,7 @@ class RecipeEntryPoint(DAG):
     def prepare_three_phase(
         self,
         model_folder=create_rad_folder._outputs.model_folder,
-        octree=prepare_dynamic._outputs.scene_folder,
+        octree=prepare_multiphase._outputs.scene_folder,
         sky_dome=create_sky_dome._outputs.sky_dome,
         bsdf_folder=create_rad_folder._outputs.bsdf_folder,
         dmtx_group_params=dmtx_group_params
@@ -255,11 +259,11 @@ class RecipeEntryPoint(DAG):
             {
                 'from': ThreePhaseInputsPreparation()._outputs.grouped_apertures_folder,
                 'to': '../../model/sender'
-            },
-            {
-                'from': ThreePhaseInputsPreparation()._outputs.results_info,
-                'to': '../../results/3_phase/_info.json'
             }
+            # {
+            #     'from': ThreePhaseInputsPreparation()._outputs.results_info,
+            #     'to': '../../results/3_phase/_info.json'
+            # }
         ]
 
     @task(template=ReadJSONList, needs=[prepare_three_phase])
@@ -271,7 +275,7 @@ class RecipeEntryPoint(DAG):
     @task(
         template=ThreePhaseMatrixCalculation,
         needs=[
-            create_rad_folder, prepare_dynamic,
+            create_rad_folder, prepare_multiphase,
             create_total_sky, create_sky_dome,
             prepare_three_phase, multiplication_info_to_json
         ],
@@ -288,16 +292,17 @@ class RecipeEntryPoint(DAG):
         receivers=create_rad_folder._outputs.receivers,
         view_mtx_rad_params=view_mtx_rad_params,
         daylight_mtx_rad_params=daylight_mtx_rad_params,
-        octree=prepare_dynamic._outputs.scene_folder,
+        octree=prepare_multiphase._outputs.scene_folder,
         sky_dome=create_sky_dome._outputs.sky_dome,
         sky_matrix=create_total_sky._outputs.sky_matrix,
         bsdf_folder=create_rad_folder._outputs.bsdf_folder,
     ):
-        return [
-            {
-                'from': ThreePhaseMatrixCalculation()._outputs.results,
-                'to': '../../results/3_phase'
-            }
-        ]
+        # return [
+        #     {
+        #         'from': ThreePhaseMatrixCalculation()._outputs.results,
+        #         'to': '../../results'
+        #     }
+        # ]
+        pass
 
 results = Outputs.folder(source='results')
