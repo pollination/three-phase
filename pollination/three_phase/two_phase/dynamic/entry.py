@@ -1,7 +1,7 @@
 from pollination_dsl.dag import Inputs, DAG, task
 from pollination_dsl.dag.inputs import ItemType
 from dataclasses import dataclass
-from pollination.honeybee_radiance.grid import MergeFolderData
+from pollination.honeybee_radiance_postprocess.grid import MergeFolderData
 
 from ._raytracing import DynamicRayTracing
 
@@ -19,6 +19,12 @@ class DynamicGroup(DAG):
         description='Identifier for this two-phase study. This value is usually the '
         'identifier of the aperture group or is set to __static__ for the static '
         'apertures in the model.', default='__static__'
+    )
+
+    light_path = Inputs.str(
+        description='Identifier for the light path of this two-phase study. This value '
+        'is the identifier of the aperture group or is set to __static___ for the '
+        'static apertures in the model.', default='__static__'
     )
 
     radiance_parameters = Inputs.str(
@@ -115,15 +121,35 @@ class DynamicGroup(DAG):
             'dist_info': '_redist_info.json'
         }
     )
-    def restructure_results(
-        self, identifier=identifier,
-        input_folder='initial_results/final',
+    def restructure_total_results(
+        self, identifier=identifier, light_path=light_path,
+        input_folder='initial_results/final/total',
         extension='ill', dist_info=sensor_grids_folder,
         results_folder=results_folder
     ):
         return [
             {
                 'from': MergeFolderData()._outputs.output_folder,
-                'to': '{{self.results_folder}}/{{self.identifier}}'
+                'to': '{{self.results_folder}}/{{self.light_path}}/{{self.identifier}}/total'
+            }
+        ]
+
+    @task(
+        template=MergeFolderData,
+        needs=[two_phase_raytracing],
+        sub_paths={
+            'dist_info': '_redist_info.json'
+        }
+    )
+    def restructure_direct_sunlight_results(
+        self, identifier=identifier, light_path=light_path,
+        input_folder='initial_results/final/direct_sunlight',
+        extension='ill', dist_info=sensor_grids_folder,
+        results_folder=results_folder
+    ):
+        return [
+            {
+                'from': MergeFolderData()._outputs.output_folder,
+                'to': '{{self.results_folder}}/{{self.light_path}}/{{self.identifier}}/direct_sunlight'
             }
         ]

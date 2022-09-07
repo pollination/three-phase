@@ -5,7 +5,8 @@ from dataclasses import dataclass
 
 from pollination.honeybee_radiance.contrib import DaylightContribution
 from pollination.honeybee_radiance.coefficient import DaylightCoefficient
-from pollination.honeybee_radiance.sky import AddRemoveSkyMatrix
+from pollination.honeybee_radiance_postprocess.sky import AddRemoveSkyMatrix
+from pollination.honeybee_radiance_postprocess.translate import BinaryToNpy
 
 
 @dataclass
@@ -141,6 +142,23 @@ class DynamicRayTracing(DAG):
         return [
             {
                 'from': AddRemoveSkyMatrix()._outputs.results_file,
-                'to': '../final/{{self.name}}.ill'
+                'to': '../final/total/{{self.name}}.ill'
+            }
+        ]
+
+    @task(
+        template=BinaryToNpy,
+        needs=[direct_sunlight]
+    )
+    def direct_sunlight_to_npy(
+        self,
+        name=grid_name,
+        matrix_file=direct_sunlight._outputs.result_file,
+        conversion='47.4 119.9 11.6'
+    ):
+        return [
+            {
+                'from': BinaryToNpy()._outputs.output_file,
+                'to': '../final/direct_sunlight/{{self.name}}.ill'
             }
         ]
