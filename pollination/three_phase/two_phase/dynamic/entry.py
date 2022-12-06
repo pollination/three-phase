@@ -3,11 +3,11 @@ from pollination_dsl.dag.inputs import ItemType
 from dataclasses import dataclass
 from pollination.honeybee_radiance_postprocess.grid import MergeFolderData
 
-from ._raytracing import DynamicRayTracing
+from ._raytracing import TwoPhaseRayTracing
 
 
 @dataclass
-class DynamicGroup(DAG):
+class TwoPhaseSimulation(DAG):
     """Dynamic entry point.
 
     This two phase workflow also includes the extra phase for accurately calculating the
@@ -17,14 +17,14 @@ class DynamicGroup(DAG):
     # inputs
     identifier = Inputs.str(
         description='Identifier for this two-phase study. This value is usually the '
-        'identifier of the aperture group or is set to __static__ for the static '
-        'apertures in the model.', default='__static__'
+        'identifier of the aperture group or is set to __static_apertures__ for the '
+        'static apertures in the model.', default='__static_apertures__'
     )
 
     light_path = Inputs.str(
         description='Identifier for the light path of this two-phase study. This value '
-        'is the identifier of the aperture group or is set to __static___ for the '
-        'static apertures in the model.', default='__static__'
+        'is the identifier of the aperture group or is set to __static_apertures__ for '
+        'the static apertures in the model.', default='__static_apertures__'
     )
 
     radiance_parameters = Inputs.str(
@@ -90,7 +90,7 @@ class DynamicGroup(DAG):
     )
 
     @task(
-        template=DynamicRayTracing,
+        template=TwoPhaseRayTracing,
         loop=sensor_grids_info,
         # create a subfolder for each grid
         sub_folder='initial_results/{{item.full_id}}',
