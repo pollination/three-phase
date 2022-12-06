@@ -7,8 +7,7 @@ from pollination.honeybee_radiance.multiphase import PrepareMultiphase
 
 from pollination.path.read import ReadJSONList
 
-from .two_phase.entry import TwoPhaseEntryPoint
-from .two_phase.dynamic.entry import DynamicGroup
+from .two_phase.dynamic.entry import TwoPhaseSimulation
 from .three_phase.preparation import ThreePhaseInputsPreparation
 from .three_phase.calculation import ThreePhaseMatrixCalculation
 
@@ -107,7 +106,7 @@ class RecipeEntryPoint(DAG):
             },
             {
                 'from': CreateRadianceFolderGrid()._outputs.sensor_grids_file,
-                'to': 'results/_info.json'
+                'to': 'results/grids_info.json'
             },
             {
                 'from': CreateRadianceFolderGrid()._outputs.receivers,
@@ -120,8 +119,9 @@ class RecipeEntryPoint(DAG):
     def generate_sunpath(self, north=north, wea=wea):
         """Create sunpath for sun-up-hours."""
         return [
-            {'from': CreateSunMatrix()._outputs.sunpath,
-             'to': 'resources/sky_vectors/sunpath.mtx'},
+            {
+                'from': CreateSunMatrix()._outputs.sunpath,
+                'to': 'resources/sky_vectors/sunpath.mtx'},
             {
                 'from': CreateSunMatrix()._outputs.sun_modifiers,
                 'to': 'resources/sky_vectors/suns.mod'
@@ -194,7 +194,7 @@ class RecipeEntryPoint(DAG):
         ]
 
     @task(
-        template=DynamicGroup,
+        template=TwoPhaseSimulation,
         loop=prepare_multiphase._outputs.two_phase_info,
         needs=[
             create_rad_folder, prepare_multiphase,
@@ -260,10 +260,6 @@ class RecipeEntryPoint(DAG):
                 'from': ThreePhaseInputsPreparation()._outputs.grouped_apertures_folder,
                 'to': '../../model/sender'
             }
-            # {
-            #     'from': ThreePhaseInputsPreparation()._outputs.results_info,
-            #     'to': '../../results/3_phase/_info.json'
-            # }
         ]
 
     @task(template=ReadJSONList, needs=[prepare_three_phase])
@@ -297,12 +293,11 @@ class RecipeEntryPoint(DAG):
         sky_matrix=create_total_sky._outputs.sky_matrix,
         bsdf_folder=create_rad_folder._outputs.bsdf_folder,
     ):
-        # return [
-        #     {
-        #         'from': ThreePhaseMatrixCalculation()._outputs.results,
-        #         'to': '../../results'
-        #     }
-        # ]
-        pass
+        return [
+            {
+                'from': ThreePhaseMatrixCalculation()._outputs.results,
+                'to': '../../results'
+            }
+        ]
 
 results = Outputs.folder(source='results')

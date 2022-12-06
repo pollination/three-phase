@@ -78,10 +78,6 @@ class ThreePhaseInputsPreparation(DAG):
         states_info=model_folder
     ):
         return [
-            # {
-            #     'from': MultiPhaseCombinations()._outputs.results_mapper,
-            #     'to': 'results/_info.json'
-            # },
             {
                 'from': MultiPhaseCombinations()._outputs.multiplication_file,
                 'to': 'multiplication_info.json'
@@ -104,9 +100,4 @@ class ThreePhaseInputsPreparation(DAG):
     multiplication_info = Outputs.file(
         description='A JSON file with matrix multiplication information.',
         source='multiplication_info.json'
-    )
-
-    results_info = Outputs.file(
-        description='A JSON file with information for loading the results.',
-        source='results/_info.json'
     )

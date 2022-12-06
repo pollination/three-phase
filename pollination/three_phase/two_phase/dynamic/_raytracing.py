@@ -10,7 +10,7 @@ from pollination.honeybee_radiance_postprocess.translate import BinaryToNpy
 
 
 @dataclass
-class DynamicRayTracing(DAG):
+class TwoPhaseRayTracing(DAG):
     # inputs
 
     radiance_parameters = Inputs.str(
