@@ -45,7 +45,7 @@ class MultiplyMatrixDag(DAG):
         view_matrix=view_matrix, t_matrix=t_matrix,
         daylight_matrix=daylight_matrix,
         output_format='f',
-        conversion='raw',
+        conversion='illuminance',
         header='keep'
     ):
         return [
