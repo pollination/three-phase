@@ -4,8 +4,21 @@ from pollination.honeybee_radiance.translate import CreateRadianceFolderGrid
 from pollination.honeybee_radiance.sky import CreateSkyDome, CreateSkyMatrix
 from pollination.honeybee_radiance.sun import CreateSunMatrix, ParseSunUpHours
 from pollination.honeybee_radiance.multiphase import PrepareMultiphase
-
+from pollination.honeybee_radiance_postprocess.post_process import AnnualDaylightMetrics
 from pollination.path.read import ReadJSONList
+
+# input/output alias
+from pollination.alias.inputs.model import hbjson_model_grid_input
+from pollination.alias.inputs.wea import wea_input_timestep_check
+from pollination.alias.inputs.north import north_input
+from pollination.alias.inputs.radiancepar import rad_par_annual_input, \
+    daylight_thresholds_input
+from pollination.alias.inputs.grid import grid_filter_input, \
+    min_sensor_count_input, cpu_count
+from pollination.alias.inputs.schedule import schedule_csv_input
+from pollination.alias.outputs.daylight import daylight_autonomy_results, \
+    continuous_daylight_autonomy_results, \
+    udi_results, udi_lower_results, udi_upper_results
 
 from .two_phase.dynamic.entry import TwoPhaseSimulation
 from .three_phase.preparation import ThreePhaseInputsPreparation
@@ -20,14 +33,16 @@ class RecipeEntryPoint(DAG):
     north = Inputs.float(
         default=0,
         description='A number for rotation from north.',
-        spec={'type': 'number', 'minimum': 0, 'maximum': 360}
+        spec={'type': 'number', 'minimum': 0, 'maximum': 360},
+        alias=north_input
     )
 
     cpu_count = Inputs.int(
         default=50,
         description='The maximum number of CPUs for parallel execution. This will be '
         'used to determine the number of sensors run by each worker.',
-        spec={'type': 'integer', 'minimum': 1}
+        spec={'type': 'integer', 'minimum': 1},
+        alias=cpu_count
     )
 
     min_sensor_count = Inputs.int(
@@ -36,13 +51,15 @@ class RecipeEntryPoint(DAG):
         'precedence over the cpu_count and can be used to ensure that '
         'the parallelization does not result in generating unnecessarily small '
         'sensor grids. The default value is set to 1, which means that the '
-        'cpu_count is always respected.', default=50,
-        spec={'type': 'integer', 'minimum': 1}
+        'cpu_count is always respected.', default=500,
+        spec={'type': 'integer', 'minimum': 1},
+        alias=min_sensor_count_input
     )
 
     radiance_parameters = Inputs.str(
         description='The radiance parameters for ray tracing.',
-        default='-ab 3 -ad 5000 -lw 1e-4'
+        default='-ab 3 -ad 5000 -lw 1e-4',
+        alias=rad_par_annual_input
     )
 
     view_mtx_rad_params = Inputs.str(
@@ -60,17 +77,20 @@ class RecipeEntryPoint(DAG):
         'of the model that are simulated. For instance, first_floor_* will simulate '
         'only the sensor grids that have an identifier that starts with '
         'first_floor_. By default, all grids in the model will be simulated.',
-        default='*'
+        default='*',
+        alias=grid_filter_input
     )
 
     model = Inputs.file(
         description='A Honeybee model in HBJSON file format.',
-        extensions=['json', 'hbjson']
+        extensions=['json', 'hbjson'],
+        alias=hbjson_model_grid_input
     )
 
     wea = Inputs.file(
         description='Wea file.',
-        extensions=['wea']
+        extensions=['wea'],
+        alias=wea_input_timestep_check
     )
 
     dmtx_group_params = Inputs.str(
@@ -82,6 +102,23 @@ class RecipeEntryPoint(DAG):
         'important and you can include one or all of them. For instance if you only '
         'want to change the aperture grid size to 0.5 you should use -s 0.5 as the '
         'input.', default='-s 0.2 -t 0.001 -ad 1000'
+    )
+
+    schedule = Inputs.file(
+        description='Path to an annual schedule file. Values should be 0-1 separated '
+        'by new line. If not provided an 8-5 annual schedule will be created.',
+        extensions=['txt', 'csv'], optional=True, alias=schedule_csv_input
+    )
+
+    thresholds = Inputs.str(
+        description='A string to change the threshold for daylight autonomy and useful '
+        'daylight illuminance. Valid keys are -t for daylight autonomy threshold, -lt '
+        'for the lower threshold for useful daylight illuminance and -ut for the upper '
+        'threshold. The default is -t 300 -lt 100 -ut 3000. The order of the keys is '
+        'not important and you can include one or all of them. For instance if you only '
+        'want to change the upper threshold to 2000 lux you should use -ut 2000 as '
+        'the input.', default='-t 300 -lt 100 -ut 3000',
+        alias=daylight_thresholds_input
     )
 
     @task(template=CreateRadianceFolderGrid)
@@ -186,7 +223,7 @@ class RecipeEntryPoint(DAG):
                 'from': PrepareMultiphase()._outputs.scene_info
             },
             {
-                'from': PrepareMultiphase()._outputs.two_phase_info
+                'from': PrepareMultiphase()._outputs.two_phase_info_list
             },
             {   'from': PrepareMultiphase()._outputs.grid_states_file,
                 'to': 'results/grid_states.json'
@@ -195,7 +232,7 @@ class RecipeEntryPoint(DAG):
 
     @task(
         template=TwoPhaseSimulation,
-        loop=prepare_multiphase._outputs.two_phase_info,
+        loop=prepare_multiphase._outputs.two_phase_info_list,
         needs=[
             create_rad_folder, prepare_multiphase,
             create_total_sky, create_direct_sky, create_sky_dome,
@@ -249,8 +286,7 @@ class RecipeEntryPoint(DAG):
     ):
         return [
             {
-                'from': ThreePhaseInputsPreparation()._outputs.multiplication_info,
-                'to': '../../calcs/3_phase/info/multiplication_info.json'
+                'from': ThreePhaseInputsPreparation()._outputs.multiplication_info
             },
             {
                 'from': ThreePhaseInputsPreparation()._outputs.grouped_apertures_info,
@@ -262,18 +298,12 @@ class RecipeEntryPoint(DAG):
             }
         ]
 
-    @task(template=ReadJSONList, needs=[prepare_three_phase])
-    def multiplication_info_to_json(
-            self, src=prepare_three_phase._outputs.multiplication_info
-            ):
-        return [{'from': ReadJSONList()._outputs.data}]
-
     @task(
         template=ThreePhaseMatrixCalculation,
         needs=[
             create_rad_folder, prepare_multiphase,
             create_total_sky, create_sky_dome,
-            prepare_three_phase, multiplication_info_to_json
+            prepare_three_phase
         ],
         sub_folder='calcs/3_phase',
         sub_paths={
@@ -284,7 +314,7 @@ class RecipeEntryPoint(DAG):
         self,
         model_folder=create_rad_folder._outputs.model_folder,
         grouped_apertures_folder=prepare_three_phase._outputs.grouped_apertures_folder,
-        multiplication_info=multiplication_info_to_json._outputs.data,
+        multiplication_info=prepare_three_phase._outputs.multiplication_info,
         receivers=create_rad_folder._outputs.receivers,
         view_mtx_rad_params=view_mtx_rad_params,
         daylight_mtx_rad_params=daylight_mtx_rad_params,
@@ -300,4 +330,53 @@ class RecipeEntryPoint(DAG):
             }
         ]
 
-results = Outputs.folder(source='results')
+    @task(
+        template=AnnualDaylightMetrics,
+        needs=[calculate_two_phase_matrix, calculate_three_phase_matrix_total]
+    )
+    def calculate_annual_metrics(
+        self, folder='results',
+        schedule=schedule, thresholds=thresholds
+    ):
+        return [
+            {
+                'from': AnnualDaylightMetrics()._outputs.annual_metrics,
+                'to': 'metrics'
+            }
+        ]
+
+    results = Outputs.folder(
+        source='results', description='Folder with raw result files (.ill) that '
+        'contain illuminance matrices for each sensor at each timestep of the analysis.'
+    )
+
+    metrics = Outputs.folder(
+        source='metrics', description='Annual metrics folder.'
+    )
+
+    da = Outputs.folder(
+        source='metrics/da', description='Daylight autonomy results.',
+        alias=daylight_autonomy_results
+    )
+
+    cda = Outputs.folder(
+        source='metrics/cda', description='Continuous daylight autonomy results.',
+        alias=continuous_daylight_autonomy_results
+    )
+
+    udi = Outputs.folder(
+        source='metrics/udi', description='Useful daylight illuminance results.',
+        alias=udi_results
+    )
+
+    udi_lower = Outputs.folder(
+        source='metrics/udi_lower', description='Results for the percent of time that '
+        'is below the lower threshold of useful daylight illuminance.',
+        alias=udi_lower_results
+    )
+
+    udi_upper = Outputs.folder(
+        source='metrics/udi_upper', description='Results for the percent of time that '
+        'is above the upper threshold of useful daylight illuminance.',
+        alias=udi_upper_results
+    )
