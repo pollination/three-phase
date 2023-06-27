@@ -58,8 +58,7 @@ class ThreePhaseInputsPreparation(DAG):
             {
                 'from': DaylightMatrixGrouping()._outputs.grouped_apertures_file,
                 'to': 'model/sender/_info.json'
-            },
-            
+            }
         ]
 
     @task(
@@ -81,9 +80,6 @@ class ThreePhaseInputsPreparation(DAG):
             {
                 'from': MultiPhaseCombinations()._outputs.multiplication_file,
                 'to': 'multiplication_info.json'
-            },
-            {
-                'from': MultiPhaseCombinations()._outputs.multiplication_info
             }
         ]
 
@@ -97,7 +93,7 @@ class ThreePhaseInputsPreparation(DAG):
         'calculation.', source='model/sender/_info.json'
     )
 
-    multiplication_info = Outputs.file(
+    multiplication_info = Outputs.list(
         description='A JSON file with matrix multiplication information.',
         source='multiplication_info.json'
     )
