@@ -93,7 +93,7 @@ class ThreePhaseInputsPreparation(DAG):
         'calculation.', source='model/sender/_info.json'
     )
 
-    multiplication_info = Outputs.list(
+    multiplication_info = Outputs.file(
         description='A JSON file with matrix multiplication information.',
         source='multiplication_info.json'
     )
