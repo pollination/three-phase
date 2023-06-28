@@ -119,7 +119,7 @@ class ThreePhaseMatrixCalculation(DAG):
     @task(
         template=MultiplyMatrixDag,
         loop=multiplication_info,
-        needs=[daylight_mtx_calculation],
+        needs=[calculate_view_matrix, daylight_mtx_calculation],
         sub_paths={
             'view_matrix': '{{item.vmtx}}',
             't_matrix': 'bsdf/{{item.tmtx}}',
