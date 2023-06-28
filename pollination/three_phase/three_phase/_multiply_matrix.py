@@ -51,7 +51,7 @@ class MultiplyMatrixDag(DAG):
         return [
             {
                 'from': MatrixMultiplicationThreePhase()._outputs.output_matrix,
-                'to': 'temp/{{identifier}}.ill'
+                'to': 'temp/{{self.identifier}}.ill'
             }
         ]
 
@@ -69,6 +69,6 @@ class MultiplyMatrixDag(DAG):
         return [
             {
                 'from': BinaryToNpy()._outputs.output_file,
-                'to': '../../results/{{light_path}}/{{state_id}}/total/{{grid_id}}.npy'
+                'to': '../../results/{{self.light_path}}/{{self.state_id}}/total/{{self.grid_id}}.npy'
             }
         ]
